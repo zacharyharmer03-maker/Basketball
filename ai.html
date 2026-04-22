@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Wordle Clone</title>
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        text-align: center;
+        background: #121213;
+        color: white;
+    }
+
+    h1 { margin-top: 20px; }
+
+    #grid {
+        display: grid;
+        grid-template-rows: repeat(6, 60px);
+        gap: 8px;
+        justify-content: center;
+        margin-top: 20px;
+    }
+
+    .row {
+        display: grid;
+        grid-template-columns: repeat(5, 60px);
+        gap: 8px;
+    }
+
+    .tile {
+        border: 2px solid #3a3a3c;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-size: 26px;
+        font-weight: bold;
+        text-transform: uppercase;
+        transition: transform 0.4s;
+    }
+
+    /* Flip animation */
+    .flip {
+        transform: rotateX(90deg);
+    }
+
+    /* Colors */
+    .green { background: #538d4e; border: none; }
+    .yellow { background: #b59f3b; border: none; }
+    .gray { background: #3a3a3c; border: none; }
+
+    #keyboard {
+        margin-top: 30px;
+    }
+
+    .key-row { margin: 5px; }
+
+    .key {
+        display: inline-block;
+        padding: 10px 12px;
+        margin: 3px;
+        background: #818384;
+        border-radius: 4px;
+        cursor: pointer;
+        user-select: none;
+        font-weight: bold;
+    }
+
+    .wide { padding: 10px 18px; }
+
+    #message {
+        margin-top: 20px;
+        font-size: 18px;
+    }
+</style>
+<a href="index.html">Home Page</a>
+
+
+
+</head>
+<body>
+
+<h1>Wordle Clone</h1>
+
+<div id="grid"></div>
+<div id="keyboard"></div>
+<div id="message"></div>
+
+<script>
+const words = [
+    "apple","grape","chair","table","plant","light","stone",
+    "bread","smile","track","dream","sweet","flame","crane"
+];
+
+let answer = words[Math.floor(Math.random() * words.length)];
+let currentRow = 0;
+let currentGuess = "";
+const maxRows = 6;
+let isAnimating = false;
+
+const grid = document.getElementById("grid");
+
+// Create grid
+for (let i = 0; i < maxRows; i++) {
+    const row = document.createElement("div");
+    row.className = "row";
+    for (let j = 0; j < 5; j++) {
+        const tile = document.createElement("div");
+        tile.className = "tile";
+        row.appendChild(tile);
+    }
+    grid.appendChild(row);
+}
+
+// Keyboard
+const keyboardLayout = ["QWERTYUIOP","ASDFGHJKL","ENTERZXCVBNMBACK"];
+const keyboard = document.getElementById("keyboard");
+
+keyboardLayout.forEach(row => {
+    const rowDiv = document.createElement("div");
+    rowDiv.className = "key-row";
+
+    let i = 0;
+    while (i < row.length) {
+        if (row.startsWith("ENTER", i)) {
+            createKey("ENTER", rowDiv, true);
+            i += 5;
+        } else if (row.startsWith("BACK", i)) {
+            createKey("⌫", rowDiv, true, "BACK");
+            i += 4;
+        } else {
+            createKey(row[i], rowDiv);
+            i++;
+        }
+    }
+
+    keyboard.appendChild(rowDiv);
+});
+
+function createKey(label, parent, wide=false, value=null) {
+    const key = document.createElement("div");
+    key.className = "key";
+    if (wide) key.classList.add("wide");
+
+    key.textContent = label;
+    key.dataset.key = value || label;
+
+    key.onclick = () => handleKey(key.dataset.key);
+    parent.appendChild(key);
+}
+
+// Input
+function handleKey(key) {
+    if (isAnimating) return;
+    if (currentRow >= maxRows) return;
+
+    if (key === "ENTER") submitGuess();
+    else if (key === "BACK") {
+        currentGuess = currentGuess.slice(0, -1);
+        updateTiles();
+    } else if (/^[A-Z]$/.test(key)) {
+        if (currentGuess.length < 5) {
+            currentGuess += key.toLowerCase();
+            updateTiles();
+        }
+    }
+}
+
+function updateTiles() {
+    const row = grid.children[currentRow];
+    for (let i = 0; i < 5; i++) {
+        row.children[i].textContent = currentGuess[i] || "";
+    }
+}
+
+// MAIN LOGIC (coloring)
+function submitGuess() {
+    if (currentGuess.length !== 5) {
+        showMessage("Enter 5 letters");
+        return;
+    }
+
+    isAnimating = true;
+
+    const row = grid.children[currentRow];
+    const answerArr = answer.split("");
+    const guessArr = currentGuess.split("");
+    const result = Array(5).fill("gray");
+
+    // Greens
+    for (let i = 0; i < 5; i++) {
+        if (guessArr[i] === answer[i]) {
+            result[i] = "green";
+            answerArr[i] = null;
+            guessArr[i] = null;
+        }
+    }
+
+    // Yellows
+    for (let i = 0; i < 5; i++) {
+        if (guessArr[i] === null) continue;
+        const idx = answerArr.indexOf(guessArr[i]);
+        if (idx !== -1) {
+            result[i] = "yellow";
+            answerArr[idx] = null;
+        }
+    }
+
+    // Animate + apply colors
+    result.forEach((color, i) => {
+        setTimeout(() => {
+            const tile = row.children[i];
+
+            tile.classList.add("flip");
+
+            setTimeout(() => {
+                tile.classList.remove("flip");
+                tile.classList.add(color);
+                updateKeyColor(currentGuess[i], color);
+
+                if (i === 4) {
+                    setTimeout(endTurn, 200);
+                }
+            }, 200);
+
+        }, i * 300);
+    });
+}
+
+function endTurn() {
+    if (currentGuess === answer) {
+        showMessage("You win!");
+        currentRow = maxRows;
+        isAnimating = false;
+        return;
+    }
+
+    currentRow++;
+    currentGuess = "";
+    isAnimating = false;
+
+    if (currentRow === maxRows) {
+        showMessage("Game Over! Word was: " + answer);
+    }
+}
+
+// Keyboard coloring
+function updateKeyColor(letter, color) {
+    document.querySelectorAll(".key").forEach(key => {
+        if (key.dataset.key.toLowerCase() === letter) {
+            if (color === "green" ||
+               (color === "yellow" && !key.classList.contains("green")) ||
+               (color === "gray" && !key.classList.contains("green") && !key.classList.contains("yellow"))) {
+                key.classList.remove("green","yellow","gray");
+                key.classList.add(color);
+            }
+        }
+    });
+}
+
+function showMessage(msg) {
+    document.getElementById("message").textContent = msg;
+}
+
+// Physical keyboard
+document.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") handleKey("ENTER");
+    else if (e.key === "Backspace") handleKey("BACK");
+    else {
+        const letter = e.key.toUpperCase();
+        if (/^[A-Z]$/.test(letter)) handleKey(letter);
+    }
+});
+</script>
+
+</body>
+</html>
